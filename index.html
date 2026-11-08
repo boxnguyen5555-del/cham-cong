@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Chấm Công Tăng Ca</title>
+    <title>Hệ Thống Chấm Công Tăng Ca PWA</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SheetJS để xuất Excel -->
@@ -67,7 +67,7 @@
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                     <button onclick="requestNotificationPermission()" class="bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-xl text-sm font-medium transition">
-                        🔔 Bật Thông Báo
+                        🔔 Bật Thông Báo Lịch Hẹn
                     </button>
                     <button id="adminSettingsBtn" onclick="toggleSettingsModal()" class="bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-xl text-sm font-medium transition hidden">
                         ⚙️ Cài đặt giờ
@@ -84,6 +84,12 @@
 
         <!-- MAIN CONTENT -->
         <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full space-y-6">
+            <!-- TRẠNG THÁI KẾT NỐI MẠNG & SYNC -->
+            <div id="networkStatusBanner" class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2.5 rounded-xl text-xs font-medium flex justify-between items-center hidden">
+                <span>⚠️ Bạn đang ngoại tuyến (Offline). Dữ liệu chấm công sẽ lưu trên máy và tự động đồng bộ khi có mạng.</span>
+                <span id="offlineCount" class="font-bold underline">0 bản ghi chờ đồng bộ</span>
+            </div>
+
             <!-- CÀI ĐẶT WEB APP URL (Dành cho Google Sheets) -->
             <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div class="w-full sm:flex-1">
@@ -109,8 +115,8 @@
                 </div>
 
                 <div class="flex items-center gap-3 w-full md:w-auto">
-                    <button onclick="openCheckInModal()" class="flex-1 md:flex-initial px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-emerald-100 transition">
-                        ✓ CHẤM CÔNG HÔM NAY
+                    <button onclick="quickCheckInNow()" class="flex-1 md:flex-initial px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md shadow-emerald-100 transition">
+                        ⚡ CHẤM CÔNG NGAY LẬP TỨC (LẤY GIỜ HIỆN TẠI)
                     </button>
                 </div>
             </div>
@@ -153,33 +159,14 @@
         </main>
     </div>
 
-    <!-- MODAL NHẬP GIỜ CHẤM CÔNG -->
-    <div id="checkInModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
-            <h3 class="text-lg font-bold text-slate-900">Chấm Công Tăng Ca</h3>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Giờ Bắt Đầu</label>
-                <input type="time" id="startTime" value="17:00" class="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold">
-            </div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">Giờ Kết Thúc</label>
-                <input type="time" id="endTime" value="20:00" class="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold">
-            </div>
-            <div class="flex gap-2 pt-2">
-                <button onclick="closeCheckInModal()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm">Hủy</button>
-                <button onclick="submitCheckIn()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm">Xác Nhận</button>
-            </div>
-        </div>
-    </div>
-
     <!-- MODAL CÀI ĐẶT GIỜ THÔNG BÁO THEO TỪNG THỨ (CHỈ ADMIN SANG MỚI THẤY) -->
     <div id="settingsModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 class="text-lg font-bold text-slate-900">⚙️ Cài Đặt Giờ Thông Báo Theo Thứ</h3>
+                <h3 class="text-lg font-bold text-slate-900">⚙️ Cài Đặt Lịch Thông Báo Theo Thứ</h3>
                 <button onclick="toggleSettingsModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
             </div>
-            <p class="text-xs text-slate-500">Thiết lập khung giờ gửi thông báo/nhắc nhở cụ thể cho từng ngày trong tuần:</p>
+            <p class="text-xs text-slate-500">Thiết lập giờ nhắc nhở tự động cho từng ngày trong tuần:</p>
 
             <div class="space-y-3" id="scheduleListContainer">
                 <!-- Render bằng JS -->
@@ -200,6 +187,7 @@
             "Nhân viên 3": "103"
         };
 
+        const DAYS_OF_WEEK_MAP = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
         const DAYS_OF_WEEK = [
             { id: 'mon', name: 'Thứ Hai' },
             { id: 'tue', name: 'Thứ Ba' },
@@ -255,6 +243,8 @@
             document.getElementById('selectedMonth').value = yearMonth;
             renderTable();
             buildScheduleInputs();
+            checkNetworkStatus();
+            syncOfflineData();
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -263,7 +253,6 @@
                 loginBtn.addEventListener('click', handleLogin);
             }
 
-            // Tự động khôi phục phiên đăng nhập lâu dài
             const savedSession = localStorage.getItem('pwa_session');
             if (savedSession) {
                 try {
@@ -279,28 +268,154 @@
             } else {
                 document.getElementById('loginScreen').classList.remove('hidden');
             }
+
+            // Theo dõi trạng thái mạng trực tuyến / ngoại tuyến
+            window.addEventListener('online', () => { checkNetworkStatus(); syncOfflineData(); });
+            window.addEventListener('offline', () => { checkNetworkStatus(); });
+
+            // Kiểm tra lịch thông báo định kỳ mỗi phút khi web mở
+            setInterval(checkScheduledNotification, 60000);
         });
 
-        // Hàm xin quyền hiển thị thông báo trên trình duyệt
+        function checkNetworkStatus() {
+            const banner = document.getElementById('networkStatusBanner');
+            let offlineQueue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
+            document.getElementById('offlineCount').innerText = `${offlineQueue.length} bản ghi chờ đồng bộ`;
+
+            if (!navigator.onLine || offlineQueue.length > 0) {
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
         function requestNotificationPermission() {
             if (!("Notification" in window)) {
-                alert("Trình duyệt của bạn không hỗ trợ thông báo đẩy.");
+                alert("Trình duyệt không hỗ trợ thông báo đẩy.");
                 return;
             }
             Notification.requestPermission().then(permission => {
                 if (permission === "granted") {
-                    alert("Đã bật thông báo thành công! Bạn sẽ nhận được thông báo khi xác nhận chấm công.");
-                    new Notification("Hệ Thống Chấm Công", { body: "Đã kết nối tính năng thông báo thành công!" });
+                    alert("Đã bật thông báo thành công! Hệ thống sẽ nhắc nhở đúng giờ đã cài đặt.");
+                    new Notification("Hệ Thống Chấm Công", { body: "Đã sẵn sàng nhắc nhở tăng ca!" });
                 } else {
-                    alert("Bạn đã từ chối quyền thông báo. Vui lòng bật lại trong cài đặt trình duyệt.");
+                    alert("Bạn đã từ chối quyền thông báo.");
                 }
             });
+        }
+
+        // Tự động kiểm tra giờ hẹn trong ngày để bắn thông báo
+        let lastNotifiedMinute = "";
+        function checkScheduledNotification() {
+            if (Notification.permission !== "granted") return;
+            
+            const now = new Date();
+            const currentDayKey = DAYS_OF_WEEK_MAP[now.getDay()];
+            const currentHours = String(now.getHours()).padStart(2, '0');
+            const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+            const currentTimeStr = `${currentHours}:${currentMinutes}`;
+            
+            const minuteKey = `${now.toDateString()}-${currentTimeStr}`;
+            if (lastNotifiedMinute === minuteKey) return;
+
+            let savedSchedule = JSON.parse(localStorage.getItem('notif_schedule') || '{}');
+            let targetTime = savedSchedule[currentDayKey] || '17:00';
+
+            if (currentTimeStr === targetTime) {
+                lastNotifiedMinute = minuteKey;
+                let notif = new Notification("⏰ Đã đến giờ chấm công tăng ca!", {
+                    body: "Nhấn vào đây để ghi nhận giờ làm ngay lập tức.",
+                    requireInteraction: true
+                });
+                notif.onclick = function() {
+                    window.focus();
+                    quickCheckInNow();
+                };
+            }
         }
 
         function saveScriptUrl() {
             const url = document.getElementById('scriptUrl').value.trim();
             localStorage.setItem('gas_script_url', url);
             alert("Đã lưu Link Web App thành công!");
+        }
+
+        // Chấm công nhanh lấy thời gian chính xác tại thời điểm bấm (Hỗ trợ ngoại tuyến hoàn toàn)
+        function quickCheckInNow() {
+            const name = document.getElementById('currentStaffName').value;
+            const now = new Date();
+            const today = now.toISOString().slice(0, 10);
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const timeNowStr = `${hours}:${minutes}`;
+
+            // Mặc định tính giờ làm từ 17:00 đến thời gian hiện tại (hoặc linh hoạt)
+            const [sh, sm] = [17, 0];
+            const [eh, em] = [now.getHours(), now.getMinutes()];
+            let diff = (eh * 60 + em) - (sh * 60 + sm);
+            if (diff < 0) diff = 30; // Tối thiểu nếu chấm sớm
+            let ot = (diff / 60).toFixed(1);
+
+            const newRecord = {
+                id: 'rec_' + Date.now(),
+                name: name,
+                date: today,
+                start: "17:00",
+                end: timeNowStr,
+                overtime: ot
+            };
+
+            // Lưu vào kho dữ liệu chính trên máy
+            let records = JSON.parse(localStorage.getItem('timesheet_records') || '[]');
+            records.push(newRecord);
+            localStorage.setItem('timesheet_records', JSON.stringify(records));
+
+            // Thêm vào hàng đợi đồng bộ (đề phòng không có mạng)
+            let offlineQueue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
+            offlineQueue.push(newRecord);
+            localStorage.setItem('offline_queue', JSON.stringify(offlineQueue));
+
+            // Thông báo trên trình duyệt
+            if (Notification.permission === "granted") {
+                new Notification("✅ Đã Chấm Công Thành Công!", {
+                    body: `Lúc: ${timeNowStr} - Tăng ca: ${ot} giờ`
+                });
+            }
+
+            alert(`Đã ghi nhận chấm công lúc ${timeNowStr} thành công!`);
+            renderTable();
+            syncOfflineData();
+        }
+
+        // Tự động đẩy dữ liệu lên Google Sheets khi có mạng trở lại
+        function syncOfflineData() {
+            const scriptUrl = localStorage.getItem('gas_script_url');
+            let offlineQueue = JSON.parse(localStorage.getItem('offline_queue') || '[]');
+            
+            if (!scriptUrl || offlineQueue.length === 0 || !navigator.onLine) {
+                checkNetworkStatus();
+                return;
+            }
+
+            // Lần lượt đẩy dữ liệu chưa đồng bộ lên Google Sheets
+            let recordToSend = offlineQueue[0];
+            fetch(scriptUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(recordToSend)
+            }).then(() => {
+                // Thành công thì xóa khỏi hàng đợi offline
+                offlineQueue.shift();
+                localStorage.setItem('offline_queue', JSON.stringify(offlineQueue));
+                checkNetworkStatus();
+                if (offlineQueue.length > 0) {
+                    syncOfflineData(); // Tiếp tục đồng bộ bản ghi tiếp theo nếu còn
+                }
+            }).catch(err => {
+                console.log("Đồng bộ chờ mạng...", err);
+                checkNetworkStatus();
+            });
         }
 
         function renderTable() {
@@ -312,7 +427,7 @@
             const filtered = records.filter(r => r.name === currentName && r.date.startsWith(selectedMonth));
 
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400">Chưa có dữ liệu chấm công tháng này. Bấm "Chấm công hôm nay" để bắt đầu.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-400">Chưa có dữ liệu chấm công tháng này. Bấm "CHẤM CÔNG NGAY LẬP TỨC" để bắt đầu.</td></tr>`;
                 document.getElementById('totalDays').innerText = "0 ngày";
                 document.getElementById('totalOvertime').innerText = "0.0 giờ";
                 return;
@@ -320,7 +435,7 @@
 
             let html = '';
             let totalHours = 0;
-            filtered.forEach((r, idx) => {
+            filtered.forEach((r) => {
                 totalHours += parseFloat(r.overtime || 0);
                 html += `
                     <tr class="hover:bg-slate-50/80 transition">
@@ -337,60 +452,6 @@
             tbody.innerHTML = html;
             document.getElementById('totalDays').innerText = `${filtered.length} ngày`;
             document.getElementById('totalOvertime').innerText = `${totalHours.toFixed(1)} giờ`;
-        }
-
-        function openCheckInModal() {
-            document.getElementById('checkInModal').classList.remove('hidden');
-        }
-
-        function closeCheckInModal() {
-            document.getElementById('checkInModal').classList.add('hidden');
-        }
-
-        function submitCheckIn() {
-            const start = document.getElementById('startTime').value;
-            const end = document.getElementById('endTime').value;
-            const name = document.getElementById('currentStaffName').value;
-            const today = new Date().toISOString().slice(0, 10);
-
-            const [sh, sm] = start.split(':').map(Number);
-            const [eh, em] = end.split(':').map(Number);
-            let diff = (eh * 60 + em) - (sh * 60 + sm);
-            if (diff < 0) diff = 0;
-            let ot = (diff / 60).toFixed(1);
-
-            let records = JSON.parse(localStorage.getItem('timesheet_records') || '[]');
-            const newRecord = {
-                id: Date.now().toString(),
-                name: name,
-                date: today,
-                start: start,
-                end: end,
-                overtime: ot
-            };
-            records.push(newRecord);
-            localStorage.setItem('timesheet_records', JSON.stringify(records));
-
-            // Gửi thông báo trực tiếp trên web khi xác nhận thành công
-            if (Notification.permission === "granted") {
-                new Notification("Chấm Công Thành Công!", {
-                    body: `Nhân viên: ${name}\nNgày: ${today}\nTăng ca: ${ot} giờ`
-                });
-            }
-
-            const scriptUrl = localStorage.getItem('gas_script_url');
-            if (scriptUrl) {
-                fetch(scriptUrl, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newRecord)
-                }).catch(err => console.log(err));
-            }
-
-            closeCheckInModal();
-            renderTable();
-            alert("Đã ghi nhận chấm công thành công!");
         }
 
         function deleteRecord(id) {
