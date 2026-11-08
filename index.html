@@ -66,8 +66,8 @@
                     </div>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
-                    <button id="adminSettingsBtn" onclick="toggleSettingsModal()" class="bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-xl text-sm font-medium transition hidden">
-                        ⚙️ Cài đặt giờ thông báo
+                    <button id="adminSettingsBtn" onclick="openSettings()" class="bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-xl text-sm font-medium transition hidden">
+                        ⚙️ Cài đặt / Danh mục
                     </button>
                     <button id="adminExportBtn" onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-sm font-medium transition shadow-sm hidden">
                         📥 Xuất Excel
@@ -139,27 +139,8 @@
         </main>
     </div>
 
-    <!-- MODAL CÀI ĐẶT GIỜ THÔNG BÁO THEO TỪNG THỨ (CHỈ ADMIN SANG MỚI THẤY) -->
-    <div id="settingsModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 class="text-lg font-bold text-slate-900">⚙️ Cài Đặt Giờ Thông Báo Theo Thứ</h3>
-                <button onclick="toggleSettingsModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl">&times;</button>
-            </div>
-            <p class="text-xs text-slate-500">Thiết lập khung giờ gửi thông báo/nhắc nhở cụ thể cho từng ngày trong tuần:</p>
-
-            <div class="space-y-3" id="scheduleListContainer">
-                <!-- Render bằng JS -->
-            </div>
-
-            <div class="flex justify-end gap-3 pt-3 border-t border-slate-100">
-                <button onclick="toggleSettingsModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition">Đóng</button>
-                <button onclick="saveNotificationSchedule()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-md transition">Lưu Cài Đặt</button>
-            </div>
-        </div>
-    </div>
-
     <script>
+        // Danh sách mã định danh bảo mật nghiêm ngặt
         const VALID_PINS = {
             "Sang": "001",
             "Nhân viên 1": "101",
@@ -167,21 +148,12 @@
             "Nhân viên 3": "103"
         };
 
-        const DAYS_OF_WEEK = [
-            { id: 'mon', name: 'Thứ Hai' },
-            { id: 'tue', name: 'Thứ Ba' },
-            { id: 'wed', name: 'Thứ Tư' },
-            { id: 'thu', name: 'Thứ Năm' },
-            { id: 'fri', name: 'Thứ Sáu' },
-            { id: 'sat', name: 'Thứ Bảy' },
-            { id: 'sun', name: 'Chủ Nhật' }
-        ];
-
         function handleLogin() {
             const name = document.getElementById('loginName').value;
             const pin = document.getElementById('loginPin').value;
             const errorEl = document.getElementById('loginError');
 
+            // Kiểm tra chính xác mã định danh tương ứng với tên
             if (VALID_PINS[name] && VALID_PINS[name] === pin) {
                 const sessionData = { name: name, isAdmin: (name === "Sang" && pin === "001") };
                 localStorage.setItem('pwa_session', JSON.stringify(sessionData));
@@ -214,13 +186,14 @@
                 document.getElementById('adminExportBtn').classList.add('hidden');
             }
 
+            // Đặt mặc định tháng hiện tại
             const now = new Date();
             const yearMonth = now.toISOString().slice(0, 7);
             document.getElementById('selectedMonth').value = yearMonth;
             renderTable();
-            buildScheduleInputs();
         }
 
+        // Tự động kiểm tra trạng thái đăng nhập khi mở trang
         window.addEventListener('DOMContentLoaded', () => {
             const savedSession = localStorage.getItem('pwa_session');
             if (savedSession) {
@@ -244,37 +217,8 @@
             alert("Đã ghi nhận chấm công thành công!");
         }
 
-        function toggleSettingsModal() {
-            const modal = document.getElementById('settingsModal');
-            modal.classList.toggle('hidden');
-        }
-
-        function buildScheduleInputs() {
-            const container = document.getElementById('scheduleListContainer');
-            let savedSchedule = JSON.parse(localStorage.getItem('notif_schedule') || '{}');
-            
-            let html = '';
-            DAYS_OF_WEEK.forEach(day => {
-                let timeVal = savedSchedule[day.id] || '17:00';
-                html += `
-                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
-                        <span class="font-semibold text-sm text-slate-700 w-28">${day.name}</span>
-                        <input type="time" id="time_${day.id}" value="${timeVal}" class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
-                `;
-            });
-            container.innerHTML = html;
-        }
-
-        function saveNotificationSchedule() {
-            let schedule = {};
-            DAYS_OF_WEEK.forEach(day => {
-                let val = document.getElementById(`time_${day.id}`).value;
-                schedule[day.id] = val;
-            });
-            localStorage.setItem('notif_schedule', JSON.stringify(schedule));
-            alert("Đã lưu lịch thông báo thành công cho từng thứ trong tuần!");
-            toggleSettingsModal();
+        function openSettings() {
+            alert("Khu vực cài đặt danh mục ngày lễ dành riêng cho Quản trị viên (Admin).");
         }
 
         function exportToExcel() {
