@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Chấm Công Tăng Ca PWA</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS để xuất Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Google Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Chấm Công">
+    
+    <!-- Dynamic Manifest tạo trực tiếp bằng Data URI -->
+    <link rel="manifest" href='data:application/manifest+json,{
+        "name": "Chấm Công Tăng Ca",
+        "short_name": "Chấm Công",
+        "start_url": ".",
+        "display": "standalone",
+        "background_color": "#f8fafc",
+        "theme_color": "#4f46e5",
+        "icons": [
+            {
+                "src": "https://placehold.co/192x192/4f46e5/ffffff?text=CC",
+                "sizes": "192x192",
+                "type": "image/png"
+            }
+        ]
+    }'>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; }
+            .print-shadow { box-shadow: none !important; border: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Modal Đăng Nhập / Phân Quyền (Hiển thị khi chưa đăng nhập) -->
+    <div id="modalDangNhap" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200">
+            <div class="text-center space-y-1">
+                <div class="bg-indigo-50 w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </div>
+                <h2 class="text-lg font-bold text-slate-800">Xác thực Chấm Công</h2>
+                <p class="text-xs text-slate-500">Vui lòng chọn nhân viên và nhập mã xác thực để tiếp tục</p>
+            </div>
+            <form onsubmit="xuLyDangNhap(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Chọn Nhân viên:</label>
+                    <select id="loginNhanVienSelect" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <!-- Render dynamic -->
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Mã xác thực nhân viên:</label>
+                    <input type="password" id="loginMaPin" placeholder="Nhập mã nhân viên..." required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <p class="text-[10px] text-slate-400 mt-1">💡 Gợi ý Admin: Chọn "Sang", mã <code class="bg-slate-100 px-1 py-0.5 rounded font-mono text-indigo-600">001</code>. Nhân viên khác dùng mã cá nhân.</p>
+                </div>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl text-sm transition shadow-md">
+                    Xác nhận & Vào ứng dụng
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Header ứng dụng -->
+    <header class="bg-indigo-600 text-white shadow-md no-print">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/10 p-2 rounded-xl">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold" id="headerTitle">Chấm Công Tăng Ca PWA</h1>
+                    <p class="text-xs text-indigo-200" id="headerSubtitle">Đang đăng nhập: Khách</p>
+                </div>
+            </div>
+            <!-- Các nút quản trị chỉ hiện khi là Admin (Sang - 001) -->
+            <div class="flex items-center gap-2 flex-wrap" id="adminActionButtons">
+                <button onclick="moModalCaiDat()" class="bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Cài đặt / Danh mục
+                </button>
+                <button onclick="xuatExcel()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Xuất Excel
+                </button>
+                <button onclick="window.print()" class="bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    In / PDF
+                </button>
+                <button onclick="dangXuat()" class="bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs">
+                    Đăng xuất
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-5xl w-full mx-auto px-4 py-6 space-y-6">
+        
+        <!-- Banner hướng dẫn cài đặt PWA lên màn hình chính -->
+        <div id="pwaBanner" class="bg-gradient-to-r from-indigo-500 to-violet-600 text-white p-4 rounded-2xl shadow-md no-print flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/20 p-2.5 rounded-xl text-2xl">📱</div>
+                <div>
+                    <h2 class="font-bold text-sm">Cài đặt ứng dụng lên màn hình điện thoại</h2>
+                    <p class="text-xs text-indigo-100">Chọn <span class="underline font-semibold">"Tạo lối tắt"</span> khi trình duyệt hỏi để mở ứng dụng nhanh chóng!</p>
+                </div>
+            </div>
+            <button onclick="anBannerPWA()" class="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition">Đã hiểu</button>
+        </div>
+
+        <!-- Bảng điều khiển bộ lọc & Nút Chấm Công Nhanh -->
+        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 no-print flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Chọn Tháng:</label>
+                    <input type="month" id="filterThang" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none" onchange="taiDuLieu()">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-500 mb-1">Nhân viên:</label>
+                    <select id="filterNhanVien" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none" onchange="taiDuLieu()">
+                        <!-- Dynamic options -->
+                    </select>
+                </div>
+            </div>
+            <div class="w-full md:w-auto flex items-center gap-2 flex-wrap">
+                <button onclick="chamCongNhanh()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl text-sm transition shadow-md flex items-center justify-center gap-2 w-full sm:w-auto">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    CHẤM CÔNG TAN CA NGAY
+                </button>
+                <button id="btnThemThuCong" onclick="moModalChamCong()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-4 py-3 rounded-xl text-sm transition flex items-center justify-center gap-2">
+                    Thêm thủ công
+                </button>
+            </div>
+        </div>
+
+        <!-- Thẻ Tổng kết nhanh -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Tổng số ngày làm</p>
+                <h3 id="tongSoNgay" class="text-2xl font-bold text-slate-800 mt-1">0 ngày</h3>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Tổng giờ tăng ca</p>
+                <h3 id="tongGioTangCa" class="text-2xl font-bold text-indigo-600 mt-1">0.0 giờ</h3>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Trạng thái Google Sheets</p>
+                <h3 id="trangThaiSheets" class="text-xs font-semibold text-amber-600 mt-2">Chưa liên kết Web App URL</h3>
+            </div>
+        </div>
+
+        <!-- Khu vực bảng chấm công chi tiết -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print-shadow">
+            <div class="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div>
+                    <h2 class="font-bold text-slate-800 text-base" id="tieuDeBang">BẢNG CHẤM CÔNG TĂNG CA</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Tự động loại trừ Chủ Nhật và Ngày lễ, chống số âm, làm tròn lùi 30 phút</p>
+                </div>
+                <div class="text-xs font-medium text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-xs">
+                    Cột ghi chú để trống sạch sẽ
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100/70 text-slate-600 text-xs font-semibold uppercase tracking-wider border-b border-slate-200">
+                            <th class="py-3.5 px-4">Ngày / Tháng</th>
+                            <th class="py-3.5 px-4">Giờ bắt đầu</th>
+                            <th class="py-3.5 px-4">Giờ kết thúc</th>
+                            <th class="py-3.5 px-4 text-center">Giờ tăng ca (Đã làm tròn)</th>
+                            <th class="py-3.5 px-4 text-right no-print" id="thThaoTac">Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="danhSachChamCong" class="divide-y divide-slate-100 text-sm text-slate-700">
+                        <!-- Dữ liệu render bằng JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal Quản Trị / Cài Đặt Danh Mục & Google Sheets -->
+    <div id="modalCaiDat" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-5 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-base">Cài đặt Danh mục & Google Sheets</h3>
+                <button onclick="dongModalCaiDat()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+            
+            <div class="space-y-4">
+                <!-- Cấu hình Google Sheets Web App URL -->
+                <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 space-y-2">
+                    <label class="block text-xs font-bold text-indigo-900">🔗 Google Apps Script Web App URL:</label>
+                    <p class="text-[11px] text-slate-600">Dán link Web App nhận được từ Google Sheets để đồng bộ dữ liệu tự động lưu vào sheet <code class="bg-white px-1 py-0.5 rounded border border-indigo-200">Du_lieu</code> (Cột ghi chú luôn để trống).</p>
+                    <input type="text" id="inputWebUrl" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-white border border-indigo-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <button onclick="luuWebUrl()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg text-xs transition shadow-xs">Lưu Link Google Sheets</button>
+                </div>
+
+                <!-- Quản lý Danh sách Nhân viên -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-slate-700">👥 Danh sách Nhân viên:</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="inputTenMoi" placeholder="Nhập tên nhân viên mới..." class="flex-grow bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <button onclick="themNhanVien()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-medium transition">Thêm</button>
+                    </div>
+                    <div id="danhSachNhanVienHienThi" class="flex flex-wrap gap-1.5 pt-1">
+                        <!-- Render tags nhân viên -->
+                    </div>
+                </div>
+
+                <!-- Quản lý Danh sách Ngày lễ -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold text-slate-700">🗓️ Danh sách Ngày lễ / Nghỉ đặc biệt:</label>
+                    <div class="flex gap-2">
+                        <input type="date" id="inputNgayLeMoi" class="flex-grow bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                        <button onclick="themNgayLe()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-medium transition">Thêm ngày lễ</button>
+                    </div>
+                    <div id="danhSachNgayLeHienThi" class="flex flex-wrap gap-1.5 pt-1 max-h-32 overflow-y-auto">
+                        <!-- Render tags ngày lễ -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end pt-2 border-t border-slate-100">
+                <button onclick="dongModalCaiDat()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2 rounded-xl text-xs font-semibold transition">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Chấm Công Thủ Công -->
+    <div id="modalChamCong" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-base">Thêm / Chỉnh Sửa Chấm Công</h3>
+                <button onclick="dongModalChamCong()" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+            <form id="formChamCong" onsubmit="luuChamCongThuCong(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Ngày chấm công:</label>
+                    <input type="date" id="inputNgay" required class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Giờ bắt đầu:</label>
+                        <input type="time" id="inputGioBatDau" required value="17:00" class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Giờ kết thúc:</label>
+                        <input type="time" id="inputGioKetThuc" required class="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="dongModalChamCong()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition">Hủy</button>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition shadow-sm">Lưu dữ liệu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Thông báo toast -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-lg text-sm hidden z-50 transition transform translate-y-0"></div>
+
+    <script>
+        // Dữ liệu danh mục lưu trữ LocalStorage
+        let danhSachNhanVien = JSON.parse(localStorage.getItem('db_nhan_vien')) || ["Sang", "Nhân viên 1", "Nhân viên 2"];
+        let danhSachNgayLe = JSON.parse(localStorage.getItem('db_ngay_le')) || [
+            "2026-01-01",
+            "2026-04-26",
+            "2026-04-30",
+            "2026-05-01",
+            "2026-09-02"
+        ];
+        let googleScriptUrl = localStorage.getItem('db_google_script_url') || "";
+        let duLieuChamCong = JSON.parse(localStorage.getItem('db_cham_cong_pwa')) || [];
+
+        // Trạng thái đăng nhập hiện tại
+        let sessionUser = JSON.parse(localStorage.getItem('db_session_user')) || null;
+
+        window.onload = function() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            document.getElementById('filterThang').value = `${year}-${month}`;
+            document.getElementById('inputNgay').value = now.toISOString().split('T')[0];
+            document.getElementById('inputWebUrl').value = googleScriptUrl;
+
+            khoiTaoLoginSelect();
+            kiemTraTrangThaiDangNhap();
+        };
+
+        function khoiTaoLoginSelect() {
+            const select = document.getElementById('loginNhanVienSelect');
+            select.innerHTML = '';
+            danhSachNhanVien.forEach(nv => {
+                let opt = document.createElement('option');
+                opt.value = nv;
+                opt.innerText = nv;
+                select.appendChild(opt);
+            });
+        }
+
+        function xuLyDangNhap(e) {
+            e.preventDefault();
+            const nv = document.getElementById('loginNhanVienSelect').value;
+            const pin = document.getElementById('loginMaPin').value.trim();
+
+            // Kiểm tra phân quyền: Nếu là "Sang" và PIN "001" thì là Admin tuyệt đối
+            let isAdmin = (nv === "Sang" && pin === "001");
+            
+            // Nếu không phải Sang 001, cho phép nhân viên khác đăng nhập bằng mã riêng (Ví dụ mặc định mã nhân viên là 123 hoặc bất kỳ pin nào > 0 kí tự)
+            if (!isAdmin && pin.length < 2) {
+                hienThongBao("⚠️ Mã xác thực không hợp lệ!");
+                return;
+            }
+
+            sessionUser = { ten: nv, isAdmin: isAdmin };
+            localStorage.setItem('db_session_user', JSON.stringify(sessionUser));
+
+            hienThongBao(`🎉 Chào mừng ${nv} đã đăng nhập!`);
+            kiemTraTrangThaiDangNhap();
+        }
+
+        function kiemTraTrangThaiDangNhap() {
+            const modal = document.getElementById('modalDangNhap');
+            if (!sessionUser) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                return;
+            }
+
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+
+            // Cập nhật giao diện theo quyền
+            const adminActions = document.getElementById('adminActionButtons');
+            const btnThemThuCong = document.getElementById('btnThemThuCong');
+            const subTitle = document.getElementById('headerSubtitle');
+
+            renderSelectNhanVien();
+
+            if (sessionUser.isAdmin) {
+                subTitle.innerText = `Đang đăng nhập: ${sessionUser.ten} (Quản trị viên Admin)`;
+                adminActions.classList.remove('hidden');
+                btnThemThuCong.classList.remove('hidden');
+                // Admin được chọn xem bất kỳ nhân viên nào
+                document.getElementById('filterNhanVien').disabled = false;
+            } else {
+                subTitle.innerText = `Nhân viên: ${sessionUser.ten}`;
+                adminActions.classList.add('hidden'); // Ẩn toàn bộ nút cài đặt, xuất excel, đăng xuất
+                btnThemThuCong.classList.add('hidden'); // Ẩn nút thêm thủ công
+                // Khóa bộ lọc nhân viên, chỉ cho phép chấm công chính tài khoản của họ
+                const selectNv = document.getElementById('filterNhanVien');
+                selectNv.value = sessionUser.ten;
+                selectNv.disabled = true;
+            }
+
+            capNhatTrangThaiSheets();
+            taiDuLieu();
+        }
+
+        function dangXuat() {
+            localStorage.removeItem('db_session_user');
+            sessionUser = null;
+            document.getElementById('loginMaPin').value = '';
+            kiemTraTrangThaiDangNhap();
+        }
+
+        function hienThongBao(noiDung) {
+            const toast = document.getElementById('toast');
+            toast.innerText = noiDung;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3500);
+        }
+
+        function anBannerPWA() {
+            document.getElementById('pwaBanner').style.display = 'none';
+        }
+
+        function moModalCaiDat() {
+            if (!sessionUser || !sessionUser.isAdmin) return;
+            document.getElementById('modalCaiDat').classList.remove('hidden');
+            document.getElementById('modalCaiDat').classList.add('flex');
+            renderDanhSachQuanTri();
+        }
+
+        function dongModalCaiDat() {
+            document.getElementById('modalCaiDat').classList.remove('flex');
+            document.getElementById('modalCaiDat').classList.add('hidden');
+            renderSelectNhanVien();
+            taiDuLieu();
+        }
+
+        function luuWebUrl() {
+            const url = document.getElementById('inputWebUrl').value.trim();
+            googleScriptUrl = url;
+            localStorage.setItem('db_google_script_url', url);
+            capNhatTrangThaiSheets();
+            hienThongBao("🔗 Đã lưu đường dẫn Google Sheets thành công!");
+        }
+
+        function capNhatTrangThaiSheets() {
+            const el = document.getElementById('trangThaiSheets');
+            if (googleScriptUrl) {
+                el.innerText = "Đã liên kết Google Sheets (Sẵn sàng đồng bộ)";
+                el.className = "text-xs font-semibold text-emerald-600 mt-2";
+            } else {
+                el.innerText = "Chưa liên kết Web App URL (Lưu cục bộ)";
+                el.className = "text-xs font-semibold text-amber-600 mt-2";
+            }
+        }
+
+        function renderSelectNhanVien() {
+            const select = document.getElementById('filterNhanVien');
+            const currentVal = select.value;
+            select.innerHTML = '';
+            danhSachNhanVien.forEach(nv => {
+                let opt = document.createElement('option');
+                opt.value = nv;
+                opt.innerText = nv;
+                select.appendChild(opt);
+            });
+            if (sessionUser && !sessionUser.isAdmin) {
+                select.value = sessionUser.ten;
+            } else if (danhSachNhanVien.includes(currentVal)) {
+                select.value = currentVal;
+            }
+        }
+
+        function renderDanhSachQuanTri() {
+            const containerNv = document.getElementById('danhSachNhanVienHienThi');
+            containerNv.innerHTML = '';
+            danhSachNhanVien.forEach((nv, idx) => {
+                let tag = document.createElement('div');
+                tag.className = "bg-slate-100 px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 text-slate-700 border border-slate-200";
+                tag.innerHTML = `<span>${nv}</span> <button onclick="xoaNhanVien(${idx})" class="text-rose-500 hover:text-rose-700 font-bold">&times;</button>`;
+                containerNv.appendChild(tag);
+            });
+
+            const containerLe = document.getElementById('danhSachNgayLeHienThi');
+            containerLe.innerHTML = '';
+            danhSachNgayLe.forEach((ngay, idx) => {
+                let tag = document.createElement('div');
+                tag.className = "bg-slate-100 px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 text-slate-700 border border-slate-200";
+                tag.innerHTML = `<span>📅 ${ngay}</span> <button onclick="xoaNgayLe(${idx})" class="text-rose-500 hover:text-rose-700 font-bold">&times;</button>`;
+                containerLe.appendChild(tag);
+            });
+        }
+
+        function themNhanVien() {
+            const input = document.getElementById('inputTenMoi');
+            const val = input.value.trim();
+            if (val && !danhSachNhanVien.includes(val)) {
+                danhSachNhanVien.push(val);
+                localStorage.setItem('db_nhan_vien', JSON.stringify(danhSachNhanVien));
+                input.value = '';
+                renderDanhSachQuanTri();
+                khoiTaoLoginSelect();
+                hienThongBao("✅ Đã thêm nhân viên mới!");
+            }
+        }
+
+        function xoaNhanVien(idx) {
+            if (danhSachNhanVien.length <= 1) {
+                hienThongBao("⚠️ Phải giữ lại ít nhất 1 nhân viên!");
+                return;
+            }
+            danhSachNhanVien.splice(idx, 1);
+            localStorage.setItem('db_nhan_vien', JSON.stringify(danhSachNhanVien));
+            renderDanhSachQuanTri();
+            khoiTaoLoginSelect();
+        }
+
+        function themNgayLe() {
+            const input = document.getElementById('inputNgayLeMoi');
+            const val = input.value;
+            if (val && !danhSachNgayLe.includes(val)) {
+                danhSachNgayLe.push(val);
+                localStorage.setItem('db_ngay_le', JSON.stringify(danhSachNgayLe));
+                input.value = '';
+                renderDanhSachQuanTri();
+                hienThongBao("✅ Đã thêm ngày lễ nghỉ!");
+            }
+        }
+
+        function xoaNgayLe(idx) {
+            danhSachNgayLe.splice(idx, 1);
+            localStorage.setItem('db_ngay_le', JSON.stringify(danhSachNgayLe));
+            renderDanhSachQuanTri();
+        }
+
+        function tinhToanTangCa(gioBatDau, gioKetThuc) {
+            const startParts = gioBatDau.split(':');
+            const endParts = gioKetThuc.split(':');
+            const startMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+            const endMin = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+
+            let diffMin = endMin - startMin;
+            if (diffMin < 0) diffMin = 0;
+
+            const roundedMin = Math.floor(diffMin / 30) * 30;
+            return roundedMin / 60;
+        }
+
+        function chamCongNhanh() {
+            const now = new Date();
+            const dayOfWeek = now.getDay();
+            const dateStr = now.toISOString().split('T')[0];
+            const nvChon = document.getElementById('filterNhanVien').value;
+
+            if (dayOfWeek === 0) {
+                hienThongBao("⚠️ Hôm nay là Chủ Nhật, không tính công tăng ca!");
+                return;
+            }
+            if (danhSachNgayLe.includes(dateStr)) {
+                hienThongBao("⚠️ Hôm nay là ngày lễ nghỉ, không tính công tăng ca!");
+                return;
+            }
+
+            let gioBatDau = (dayOfWeek === 6) ? "13:00" : "17:00";
+            let gioKetThucHienThi = String(now.getHours()).padStart(2, '0') + ":" + String(now.getMinutes()).padStart(2, '0');
+            const gioTangCa = tinhToanTangCa(gioBatDau, gioKetThucHienThi);
+
+            const record = {
+                id: Date.now(),
+                nhanVien: nvChon,
+                ngay: dateStr,
+                gioBatDau: gioBatDau,
+                gioKetThuc: gioKetThucHienThi,
+                gioTangCa: gioTangCa,
+                ghiChu: ""
+            };
+
+            const existingIndex = duLieuChamCong.findIndex(i => i.ngay === dateStr && i.nhanVien === nvChon);
+            if (existingIndex >= 0) {
+                duLieuChamCong[existingIndex].gioKetThuc = gioKetThucHienThi;
+                duLieuChamCong[existingIndex].gioTangCa = gioTangCa;
+            } else {
+                duLieuChamCong.push(record);
+            }
+
+            localStorage.setItem('db_cham_cong_pwa', JSON.stringify(duLieuChamCong));
+            taiDuLieu();
+            hienThongBao(`🎉 Chấm công thành công lúc ${gioKetThucHienThi} (${gioTangCa.toFixed(1)}h)!`);
+
+            if (googleScriptUrl) {
+                fetch(googleScriptUrl, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(record)
+                }).catch(err => console.log("Sync error: ", err));
+            }
+        }
+
+        function taiDuLieu() {
+            const thangChon = document.getElementById('filterThang').value;
+            const nvChon = document.getElementById('filterNhanVien').value;
+            const tbody = document.getElementById('danhSachChamCong');
+            tbody.innerHTML = '';
+
+            const filtered = duLieuChamCong.filter(item => item.ngay.startsWith(thangChon) && item.nhanVien === nvChon);
+            filtered.sort((a, b) => new Date(a.ngay) - new Date(b.ngay));
+
+            let tongNgay = 0;
+            let tongGio = 0;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${sessionUser && sessionUser.isAdmin ? 5 : 4}" class="text-center py-8 text-slate-400 italic">Không có dữ liệu chấm công trong tháng ${thangChon}</td></tr>`;
+            } else {
+                filtered.forEach(item => {
+                    if (item.gioTangCa > 0) tongNgay++;
+                    tongGio += parseFloat(item.gioTangCa);
+
+                    let tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50/80 transition border-b border-slate-100 last:border-none";
+                    
+                    let htmlContent = `
+                        <td class="py-3.5 px-4 font-medium text-slate-800">${item.ngay}</td>
+                        <td class="py-3.5 px-4 text-slate-600">${item.gioBatDau}</td>
+                        <td class="py-3.5 px-4 text-slate-600">${item.gioKetThuc}</td>
+                        <td class="py-3.5 px-4 text-center font-semibold text-indigo-600">${item.gioTangCa.toFixed(1)} giờ</td>
+                    `;
+
+                    if (sessionUser && sessionUser.isAdmin) {
+                        htmlContent += `
+                            <td class="py-3.5 px-4 text-right no-print">
+                                <button onclick="xoaDong(${item.id})" class="text-rose-500 hover:text-rose-700 text-xs font-medium px-2.5 py-1 rounded-md hover:bg-rose-50 transition">Xóa</button>
+                            </td>
+                        `;
+                    }
+                    tr.innerHTML = htmlContent;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // Ẩn/hiện cột thao tác ở header bảng
+            const thThaoTac = document.getElementById('thThaoTac');
+            if (sessionUser && sessionUser.isAdmin) {
+                thThaoTac.classList.remove('hidden');
+            } else {
+                thThaoTac.classList.add('hidden');
+            }
+
+            document.getElementById('tongSoNgay').innerText = `${tongNgay} ngày`;
+            document.getElementById('tongGioTangCa').innerText = `${tongGio.toFixed(1)} giờ`;
+            document.getElementById('tieuDeBang').innerText = `BẢNG CHẤM CÔNG THÁNG ${thangChon} - ${nvChon.toUpperCase()}`;
+        }
+
+        function moModalChamCong() {
+            if (!sessionUser || !sessionUser.isAdmin) return;
+            document.getElementById('modalChamCong').classList.remove('hidden');
+            document.getElementById('modalChamCong').classList.add('flex');
+        }
+
+        function dongModalChamCong() {
+            document.getElementById('modalChamCong').classList.remove('flex');
+            document.getElementById('modalChamCong').classList.add('hidden');
+        }
+
+        function luuChamCongThuCong(e) {
+            e.preventDefault();
+            const ngay = document.getElementById('inputNgay').value;
+            const gioBatDau = document.getElementById('inputGioBatDau').value;
+            const gioKetThuc = document.getElementById('inputGioKetThuc').value;
+            const nvChon = document.getElementById('filterNhanVien').value;
+
+            const gioTangCa = tinhToanTangCa(gioBatDau, gioKetThuc);
+            const record = { id: Date.now(), nhanVien: nvChon, ngay: ngay, gioBatDau: gioBatDau, gioKetThuc: gioKetThuc, gioTangCa: gioTangCa, ghiChu: "" };
+
+            const existingIndex = duLieuChamCong.findIndex(i => i.ngay === ngay && i.nhanVien === nvChon);
+            if (existingIndex >= 0) {
+                duLieuChamCong[existingIndex] = record;
+            } else {
+                duLieuChamCong.push(record);
+            }
+
+            localStorage.setItem('db_cham_cong_pwa', JSON.stringify(duLieuChamCong));
+            dongModalChamCong();
+            taiDuLieu();
+            hienThongBao("✅ Đã lưu dữ liệu thủ công!");
+
+            if (googleScriptUrl) {
+                fetch(googleScriptUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) }).catch(err => {});
+            }
+        }
+
+        function xoaDong(id) {
+            if (!sessionUser || !sessionUser.isAdmin) return;
+            if (confirm("Bạn có chắc chắn muốn xóa bản ghi này không?")) {
+                duLieuChamCong = duLieuChamCong.filter(item => item.id !== id);
+                localStorage.setItem('db_cham_cong_pwa', JSON.stringify(duLieuChamCong));
+                taiDuLieu();
+                hienThongBao("🗑️ Đã xóa bản ghi.");
+            }
+        }
+
+        function xuatExcel() {
+            if (!sessionUser || !sessionUser.isAdmin) return;
+            const thangChon = document.getElementById('filterThang').value;
+            const nvChon = document.getElementById('filterNhanVien').value;
+            const filtered = duLieuChamCong.filter(item => item.ngay.startsWith(thangChon) && item.nhanVien === nvChon);
+
+            if (filtered.length === 0) {
+                hienThongBao("⚠️ Không có dữ liệu để xuất Excel!");
+                return;
+            }
+
+            const dataToExport = filtered.map(item => ({
+                "Nhân viên": item.nhanVien,
+                "Ngày": item.ngay,
+                "Giờ bắt đầu": item.gioBatDau,
+                "Giờ kết thúc": item.gioKetThuc,
+                "Giờ tăng ca": item.gioTangCa,
+                "Ghi chú": ""
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Cham_Cong");
+            XLSX.writeFile(workbook, `Bang_Cham_Cong_${thangChon}_${nvChon}.xlsx`);
+            hienThongBao("📥 Đã xuất file Excel thành công!");
+        }
+    </script>
+</body>
+</html>
